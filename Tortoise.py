@@ -6,11 +6,19 @@ import re
 import time
 
 
-class RepositoryNotFoundError(Exception):
+class SublimeTortoiseError(Exception):
     pass
 
 
-class NotFoundError(Exception):
+class RepositoryNotFoundError(SublimeTortoiseError):
+    pass
+
+
+class NotFoundError(SublimeTortoiseError):
+    pass
+
+
+class InvalidVCSError(SublimeTortoiseError):
     pass
 
 
@@ -25,31 +33,40 @@ class TortoiseCommand():
 
     def get_vcs(self, path):
         settings = sublime.load_settings('Tortoise.sublime-settings')
+        load_sequence = settings.get('vcs_load_sequence')
 
         if path == None:
             raise NotFoundError('Unable to run commands on an unsaved file')
-        vcs = None
 
-        try:
-            vcs = TortoiseSVN(settings.get('svn_tortoiseproc_path'), path)
-        except (RepositoryNotFoundError):
-            pass
+        # Find the first type of VCS that can initialize itself for this path.
+        for vcs_name in load_sequence:
+            vcs_method = self.get_vcs_method(vcs_name)
+            try:
+                vcs = vcs_method(path, settings)
+                if vcs:
+                    return vcs
+            except (RepositoryNotFoundError):
+                vcs = None
 
-        try:
-            vcs = TortoiseGit(settings.get('git_tortoiseproc_path'), path)
-        except (RepositoryNotFoundError):
-            pass
+        # If we get this far, we didn't find a matching VCS.
+        raise NotFoundError('The current file does not appear to be in a ' +
+            'Subversion, Git or Mercurial working copy')
 
-        try:
-            vcs = TortoiseHg(settings.get('hg_hgtk_path'), path)
-        except (RepositoryNotFoundError):
-            pass
+    def get_vcs_method(self, vcs_name):
+        vcs_method = getattr(self, "create_vcs_%s" % vcs_name, None)
+        if vcs_method is None:
+            raise InvalidVCSError("The following VCS name in the user setting"
+                                  "'vcs_load_sequence' is invalid: %r" % vcs_name)
+        return vcs_method
 
-        if vcs == None:
-            raise NotFoundError('The current file does not appear to be in an ' +
-                'SVN, Git or Mercurial working copy')
+    def create_vcs_svn(self, path, settings):
+        return TortoiseSVN(settings.get("svn_tortoiseproc_path"), path)
 
-        return vcs
+    def create_vcs_git(self, path, settings):
+        return TortoiseGit(settings.get("git_tortoiseproc_path"), path)
+
+    def create_vcs_hg(self, path, settings):
+        return TortoiseHg(settings.get("hg_hgtk_path"), path)
 
     def menus_enabled(self):
         settings = sublime.load_settings('Tortoise.sublime-settings')
