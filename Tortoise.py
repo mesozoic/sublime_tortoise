@@ -55,9 +55,19 @@ class TortoiseCommand():
     def get_vcs_method(self, vcs_name):
         vcs_method = getattr(self, "create_vcs_%s" % vcs_name, None)
         if vcs_method is None:
-            raise InvalidVCSError("The following VCS name in the user setting"
-                                  "'vcs_load_sequence' is invalid: %r" % vcs_name)
+            raise InvalidVCSError(
+                "The name '%s' in the 'vcs_load_sequence' setting is invalid."
+                "\n\nValid options are: %s" % (
+                    vcs_name, ", ".join(self.get_vcs_methods_available())))
         return vcs_method
+
+    def _get_vcs_methods_available(self, prefix = 'create_vcs_'):
+        for attr_name in dir(self):
+            if attr_name.startswith(prefix):
+                yield attr_name[len(prefix):]
+
+    def get_vcs_methods_available(self):
+        return sorted(list(self._get_vcs_methods_available()))
 
     def create_vcs_svn(self, path, settings):
         return TortoiseSVN(settings.get("svn_tortoiseproc_path"), path)
@@ -73,12 +83,13 @@ class TortoiseCommand():
         return settings.get('enable_menus', True)
 
 
-def handles_not_found(fn):
+def handles_package_exceptions(fn):
     def handler(self, *args, **kwargs):
         try:
             fn(self, *args, **kwargs)
-        except (NotFoundError) as (exception):
-            sublime.error_message('Tortoise: ' + str(exception))
+        except (SublimeTortoiseError) as (exception):
+            sublime.error_message('Tortoise: %s\n\n%s'
+                % (exception.__class__.__name__, str(exception)))
     return handler
 
 
@@ -95,14 +106,14 @@ def invisible_when_not_found(fn):
 
 
 class TortoiseExploreCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).explore(path if paths else None)
 
 
 class TortoiseCommitCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).commit(path if os.path.isdir(path) else None)
@@ -119,7 +130,7 @@ class TortoiseCommitCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseStatusCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).status(path if os.path.isdir(path) else None)
@@ -136,7 +147,7 @@ class TortoiseStatusCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseSyncCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).sync(path if os.path.isdir(path) else None)
@@ -153,7 +164,7 @@ class TortoiseSyncCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseLogCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).log(path if paths else None)
@@ -178,7 +189,7 @@ class TortoiseLogCommand(sublime_plugin.WindowCommand, TortoiseCommand):
             ['', 'M', 'R', 'C', 'U']
 
 class TortoiseBlameCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).blame(path if paths else None)
@@ -203,7 +214,7 @@ class TortoiseBlameCommand(sublime_plugin.WindowCommand, TortoiseCommand):
             ['A', '', 'M', 'R', 'C', 'U']
 
 class TortoiseDiffCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).diff(path if paths else None)
@@ -232,7 +243,7 @@ class TortoiseDiffCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseAddCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).add(path)
@@ -246,7 +257,7 @@ class TortoiseAddCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseRemoveCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).remove(path)
@@ -268,7 +279,7 @@ class TortoiseRemoveCommand(sublime_plugin.WindowCommand, TortoiseCommand):
 
 
 class TortoiseRevertCommand(sublime_plugin.WindowCommand, TortoiseCommand):
-    @handles_not_found
+    @handles_package_exceptions
     def run(self, paths=None):
         path = self.get_path(paths)
         self.get_vcs(path).revert(path)
